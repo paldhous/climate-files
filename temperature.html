@@ -1,0 +1,446 @@
+
+
+<head>
+ <meta charset='utf-8' />
+  <title>Climate: Temperature</title>
+  <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.css' rel='stylesheet' />
+  <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js'></script>
+  <script src='https://code.highcharts.com/highcharts.js'></script>
+  <script src='https://code.highcharts.com/modules/accessibility.js'></script>
+  <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v2.3.0/mapbox-gl-geocoder.min.js'></script>
+  <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v2.3.0/mapbox-gl-geocoder.css' type='text/css' />
+  <link rel='preconnect' href='https://fonts.googleapis.com'>
+  <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+  <link href='https://fonts.googleapis.com/css2?family=Roboto&display=swap' rel='stylesheet'>
+  
+!-- CSS to style the divs, fonts etc -->
+<style>
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12
+  }
+
+  #map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    background: #fff;
+  }
+
+  #container {
+    width: 300;
+    height: 150;
+    background-color: #fff;
+    font-family: 'Roboto', sans-serif;
+    z-index: 100;
+    border-radius: 5px;
+  }
+
+  #legend {
+    position: absolute;
+    bottom: 7;
+    left: 7;
+    padding: 5px 5px;
+    background-color: #fff;
+    width: 300;
+    height: 260;
+    font-family: 'Roboto', sans-serif;
+    z-index: 100;
+    border-radius: 5px;
+  }
+
+  #legend span {
+    opacity: 0.9;
+  }  
+
+  td {
+    font-size: 9px;
+    opacity: 0.7;
+  }
+
+</style>
+
+</head>
+
+<body>
+
+  <!-- div to hold the map -->
+  <div id='map'></div>
+
+  <!-- div to hold the chart -->
+<div id='legend'>
+
+  <p>Diff. between last decade and 1951&#8211;80 average (° C)</p>
+  <table>
+        <tr>
+        <td> ~ -1</td>
+        <td> ~ 0</td>
+        <td> ~ 1</td>
+        <td> ~ 2</td>
+        <td> > 2.5</td>
+
+       </tr>
+         <tr>
+        <td><span style='background:#b4d6e7;'>&#8195;&#8195;&#8195;</span></td>
+        <td><span style='background:#f7f7f7;'>&#8195;&#8195;&#8195;</span></td>
+        <td><span style='background:#f5c1a9;'>&#8195;&#8195;&#8195;</span></td>
+        <td><span style='background:#e66e61;'>&#8195;&#8195;&#8195;</span></td>
+        <td><span style='background:#ca0020;'>&#8195;&#8195;&#8195;</span></td>
+        </tr>
+  </table>
+
+  <p>At this location</p>
+
+  <div id='container'></div>
+
+</div>
+
+  <!-- JavaScript to display and control the map -->
+  <script>
+
+    mapboxgl.accessToken = 'pk.eyJ1IjoiYWxkaG91c3AiLCJhIjoiY2pueHpmeGNxMGhxNjNxbXhpMzViNGUyZSJ9.FQiJVij9bPb65b2jTDtBGA';
+
+    // var bounds = [
+    //     [-180, -65], // Southwest coordinates
+    //     [180, 80]  // Northeast coordinates
+    // ];
+
+    var map = new mapboxgl.Map({
+      container: 'map', // places map in the map div
+      style: 'mapbox://styles/aldhousp/cld0nsu3r000001njrh6yci0x', // Mapbox style using temperature_diff overlay
+      center: [0,45],
+      zoom: 2,
+      maxZoom: 10,
+      minZoom: 1,
+      // maxBounds: bounds
+    });
+
+    const geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+    });
+
+    // Add geocoder
+    map.addControl(geocoder, 'top-left');
+    // Add zoom controls
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+    // Disable scroll zooming
+    map.scrollZoom.disable();
+    // disable map rotation using right click + drag
+    map.dragRotate.disable();
+    // disable map rotation using touch rotation gesture
+    map.touchZoomRotate.disableRotation();
+
+
+    // add the data layer
+    map.on('load', function() {
+
+    map.addSource('temperature-annual-src', {
+          type: 'vector',
+          url: 'mapbox://aldhousp.25roxops'
+    });
+
+    // add a layer to serve as marker, but no data yet
+    map.addSource('single-point', {
+        'type': 'geojson',
+        'data': {
+            'type': 'FeatureCollection',
+            'features': []
+        }
+    });
+
+    map.addLayer({
+          'id': 'point',
+          'source': 'single-point',
+          'type': 'circle',
+          'paint': {
+              'circle-radius': 7,
+              'circle-color': '#000'
+          }
+      });
+
+        var testPoint = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [0.1,51.5]
+          },
+          properties: {
+            name: 'Point'
+          }
+        };
+        map.getSource('single-point').setData(testPoint.geometry);
+        $.ajax({
+          url: 'https://api.mapbox.com/v4/aldhousp.25roxops/tilequery/'+testPoint.geometry.coordinates+'.json?access_token=pk.eyJ1IjoiYWxkaG91c3AiLCJhIjoiY2pueHpmeGNxMGhxNjNxbXhpMzViNGUyZSJ9.FQiJVij9bPb65b2jTDtBGA'
+        }).done(function(data) {
+          console.log(data.features[0].properties)
+          var chartData = Object.keys(data.features[0].properties).map((key) => [Number(key), data.features[0].properties[key]]);
+          console.log(chartData)
+      
+          Highcharts.chart('container', {
+
+            chart: {
+               backgroundColor: '#fff',
+               style: {
+                  fontFamily: 'Roboto'
+              }
+            },
+
+            title: {
+                text: '',
+                style: {
+                  fontSize: 0
+              }
+            },
+          
+            yAxis: {
+                title: {
+                    text: 'Diff. from 1951&#8211;1980 average (° C)',
+                    style: {
+                  fontSize: 10
+                  }
+                }
+            },
+
+            legend: {      
+              enabled: false
+            },
+
+            credits: {
+              enabled: false
+            },
+
+            tooltip: {
+                       formatter: function() {
+                          return '<b>' + this.x + '</b>: ' + Math.round(this.y * 100) / 100;
+                        }
+            },
+
+            plotOptions: {
+                series: {
+                    label: {
+                        connectorAllowed: false
+                    }
+                }
+            },
+
+            series: [{
+                lineWidth: 0.8,
+                color: '#a50001',
+                name: 'temperature',
+                data: chartData
+            }],
+
+            responsive: {
+                rules: [{
+                    condition: {
+                        maxWidth: 500
+                    },
+                    chartOptions: {
+                        legend: {
+                            layout: 'horizontal',
+                            align: 'center',
+                            verticalAlign: 'bottom'
+                        }
+                    }
+                }]
+            }
+            });
+
+                });
+              });
+
+
+    // drop marker and add chart with time series for that grid cell on click
+    map.on('click', function (e) {
+        var testPoint = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [e.lngLat.lng,e.lngLat.lat]
+          },
+          properties: {
+            name: 'Point'
+          }
+        };
+        map.getSource('single-point').setData(testPoint.geometry);
+        $.ajax({
+          url: 'https://api.mapbox.com/v4/aldhousp.25roxops/tilequery/'+testPoint.geometry.coordinates+'.json?access_token=pk.eyJ1IjoiYWxkaG91c3AiLCJhIjoiY2pueHpmeGNxMGhxNjNxbXhpMzViNGUyZSJ9.FQiJVij9bPb65b2jTDtBGA'
+        }).done(function(data) {
+          console.log(data.features[0].properties)
+          var chartData = Object.keys(data.features[0].properties).map((key) => [Number(key), data.features[0].properties[key]]);
+          console.log(chartData)
+
+          Highcharts.chart('container', {
+            
+            chart: {
+               backgroundColor: '#fff',
+               style: {
+                  fontFamily: 'Roboto'
+              }
+            },
+
+            title: {
+                text: '',
+                style: {
+                  fontSize: 0
+              }
+            },
+          
+            yAxis: {
+                title: {
+                    text: 'Diff. from 1951&#8211;1980 average (° C)',
+                    style: {
+                  fontSize: 10
+                  }
+                }
+            },
+
+            legend: {
+                enabled: false
+            },
+
+            credits: {
+              enabled: false
+            },
+
+            tooltip: {
+               formatter: function() {
+                  return '<b>' + this.x + '</b>: ' + Math.round(this.y * 100) / 100;
+                }
+            },
+
+            plotOptions: {
+                series: {
+                    lineWidth: 0.8,
+                    color: '#a50001',
+                    label: {
+                        connectorAllowed: false
+                    }
+                }
+            },
+
+            series: [{
+                name: 'temperature',
+                data: chartData
+            }],
+
+            responsive: {
+                rules: [{
+                    condition: {
+                        maxWidth: 500
+                    },
+                    chartOptions: {
+                        legend: {
+                            layout: 'horizontal',
+                            align: 'center',
+                            verticalAlign: 'bottom'
+                        }
+                    }
+                }]
+            }
+            });
+
+        });
+      });
+
+      // same for a location search
+      geocoder.on('result',  function (e) {
+        map.getSource('single-point').setData(e.result.geometry);
+        var testPoint = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [e.result.geometry.coordinates[0],e.result.geometry.coordinates[1]]
+          },
+          properties: {
+            name: 'Test point'
+          }
+        };
+        $.ajax({
+          url: 'https://api.mapbox.com/v4/aldhousp.25roxops/tilequery/'+testPoint.geometry.coordinates+'.json?access_token=pk.eyJ1IjoiYWxkaG91c3AiLCJhIjoiY2pueHpmeGNxMGhxNjNxbXhpMzViNGUyZSJ9.FQiJVij9bPb65b2jTDtBGA'
+        }).done(function(data) {
+          console.log(data.features[0].properties)
+          var chartData = Object.keys(data.features[0].properties).map((key) => [Number(key), data.features[0].properties[key]]);
+          console.log(chartData)
+
+            Highcharts.chart('container', {
+
+            chart: {
+               backgroundColor: '#fff',
+               style: {
+                  fontFamily: 'Roboto'
+              }
+            },
+
+            title: {
+                text: '',
+                style: {
+                  fontSize: 0
+              }
+            },
+          
+            yAxis: {
+                title: {
+                    text: 'Diff. from 1951&#8211;1980 average (° C)',
+                    style: {
+                  fontSize: 10
+                  }
+                }
+            },
+
+            legend: {
+                enabled: false
+            },
+
+            tooltip: {
+                       formatter: function() {
+                          return '<b>' + this.x + '</b>: ' + Math.round(this.y * 100) / 100;
+                        }
+            },
+
+            credits: {
+              enabled: false
+            },
+
+            plotOptions: {
+                series: {
+                    label: {
+                        connectorAllowed: false
+                    }
+                }
+            },
+
+            series: [{
+                lineWidth: 0.8,
+                color: '#a50001',
+                name: 'temperature',
+                data: chartData
+            }],
+
+            responsive: {
+                rules: [{
+                    condition: {
+                        maxWidth: 500
+                    },
+                    chartOptions: {
+                        legend: {
+                            layout: 'horizontal',
+                            align: 'center',
+                            verticalAlign: 'bottom'
+                        }
+                    }
+                }]
+            }
+            });
+
+        });
+      });
+
+  </script>
+</body>

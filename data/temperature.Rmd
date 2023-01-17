@@ -1,0 +1,79 @@
+---
+title: "Processing NASA's GISTEMP data gridded temperature history NetCDF files"
+author: "Peter Aldhous"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE}
+library(knitr)
+opts_chunk$set(out.width="900px", dpi=300, message =FALSE, warning = FALSE)
+```
+
+### Processing NASA's GISTEMP data
+
+NASA's [GISTEMP](https://data.giss.nasa.gov/gistemp/) surface temperature analysis contains monthly temperature records from 1880 onward for a global grid with cells of 2 degrees latitude by 2 degrees longitude. The values in each cell are the difference between average temperature for that time period compared to the average for a reference period from 1951 to 1980.
+
+#### Setting up
+
+```{r}
+# load required packages
+library(raster)
+library(rgdal)
+
+# load data from NASA netCDF file as raster brick object
+temperature_monthly <- brick("gistemp1200_GHCNv4_ERSSTv5.nc")
+
+```
+
+NetCDF files often contain multiple gridded data layers, one for each time interval -- in this case a layer for each month. Using the [**brick**](http://finzi.psych.upenn.edu/library/raster/html/brick.html) function, such netCDF data files can be loaded as [RasterBrick](https://rspatial.org/raster/pkg/2-classes.html#rasterstack-and-rasterbrick) objects, which hold multiple data layers.
+
+#### Making new layers for years, rather than months
+
+The following code uses the [**stackApply**](https://search.r-project.org/library/raster/html/stackApply.html) function to run some calculations on the data to create one layer for each year, rather than each month:
+
+```{r}
+# create vector to serve as index for calculating annual values
+# we need an index with 12 repeats of an index number for each of the 143 years in the data
+num_years <- rep(1:143, each = 12)
+
+# calculate annual averages, giving 143 layers one for each year 1880-2022 in the data
+temperature_annual <- stackApply(temperature_monthly, indices = num_years, fun = mean)
+```
+
+#### Convert to a spatial polygons data frame, then write to GeoJSON
+
+```{r}
+# convert to spatial polygons data frame
+temperature_annual_df <- as(temperature_annual,"SpatialPolygonsDataFrame")
+# name the variables in the data frame as years
+names(temperature_annual_df@data) <- c(as.character(1880:2022))
+
+# write to GeoJSON
+writeOGR(temperature_annual_df, "temperature_annual_nasa.geojson",
+layer = "temperature", driver = "GeoJSON")
+```
+
+#### Make the map overlay
+
+The code below first subsets the annual data to isolate the most recent decade, and then uses the [**calc**](https://rspatial.org/raster/spatial/8-rastermanip.html?#calc) function to calculate the average temperature differences for this decade from the 1951-1980 reference period.
+
+```{r}
+temperature_diff <- subset(temperature_annual, 134:143)
+temperature_diff <- calc(temperature_diff, mean, na.rm = TRUE) 
+```
+
+#### Interpolate the data to a higher resolution and write to a GeoTIFF
+
+```{r}
+# create a raster object with the same extent but higher resolution 
+r <- raster(nrow = 1800, ncol = 3600, extent(c(-180, 180, -90, 90))) 
+# resample the data using this raster 
+temperature_diff <- resample(temperature_diff, r, method = "bilinear")
+
+# write to GeoTIFF
+writeRaster(temperature_diff, filename = "temperature_diff_nasa.tif", format = "GTiff", overwrite = TRUE)
+```
+
+I styled the GeoTIFF in QGIS, then polygonized and exported to GeoJSON to make the map overlay. The interactive map and chart was made with [Mapbox Studio](https://www.mapbox.com/mapbox-studio), [MapboxGL](https://docs.mapbox.com/mapbox-gl-js/api/) and [Highcharts](https://www.highcharts.com/). In the web app, the gridded vector tileset is queried on a map click or location search using the Mapbox [Tilequery](https://docs.mapbox.com/api/maps/tilequery/) API to yield the data displayed in the chart.
